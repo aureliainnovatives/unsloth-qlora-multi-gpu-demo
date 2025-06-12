@@ -138,6 +138,7 @@ def main():
     # Initialize config
     config = Config()
     config.max_steps = 50  # Keep short for testing
+    config.max_seq_length = 256  # Shorter to avoid truncation issues
     
     # Setup GPU environment
     is_multi_gpu = setup_gpu_environment(args)
@@ -215,8 +216,12 @@ def main():
         eval_dataset=eval_dataset,
         dataset_text_field="text",
         max_seq_length=config.max_seq_length,
-        dataset_num_proc=2,
+        dataset_num_proc=1,  # Reduce to 1 for stability
         packing=False,  # Disable packing for multi-GPU stability
+        dataset_kwargs={
+            "add_special_tokens": False,  # Let SFTTrainer handle this
+            "append_concat_token": False,  # Avoid concatenation issues
+        },
         args=training_args,
     )
     
