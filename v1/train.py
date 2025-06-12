@@ -73,16 +73,32 @@ def load_model_and_tokenizer(config, accelerator):
         )
     
     # Apply LoRA using Unsloth
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=config.r,
-        target_modules=config.target_modules,
-        lora_alpha=config.lora_alpha,
-        lora_dropout=config.lora_dropout,
-        bias=config.bias,
-        use_gradient_checkpointing="unsloth",  # Use Unsloth's optimized gradient checkpointing
-        random_state=config.seed,
-    )
+    if accelerator.num_processes > 1:
+        # Multi-GPU: Disable Unsloth gradient checkpointing (incompatible with DDP)
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=config.r,
+            target_modules=config.target_modules,
+            lora_alpha=config.lora_alpha,
+            lora_dropout=config.lora_dropout,
+            bias=config.bias,
+            use_gradient_checkpointing=True,  # Use standard gradient checkpointing
+            random_state=config.seed,
+        )
+        logger.info("Multi-GPU: Using standard gradient checkpointing")
+    else:
+        # Single GPU: Use Unsloth optimizations
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=config.r,
+            target_modules=config.target_modules,
+            lora_alpha=config.lora_alpha,
+            lora_dropout=config.lora_dropout,
+            bias=config.bias,
+            use_gradient_checkpointing="unsloth",  # Use Unsloth's optimized gradient checkpointing
+            random_state=config.seed,
+        )
+        logger.info("Single GPU: Using Unsloth optimized gradient checkpointing")
     
     # Set pad token if needed
     if tokenizer.pad_token is None:
@@ -313,6 +329,12 @@ def main():
         compute_metrics=None,  # Disable to avoid Unsloth evaluation issues
         callbacks=callbacks,
     )
+    
+    # For multi-GPU, set static graph to help with DDP compatibility
+    if accelerator.num_processes > 1:
+        if hasattr(trainer.model, '_set_static_graph'):
+            trainer.model._set_static_graph()
+            logger.info("Multi-GPU: Set static graph for DDP compatibility")
     
     # Start training
     logger.info("Starting training...")
