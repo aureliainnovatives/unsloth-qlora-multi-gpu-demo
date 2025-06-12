@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+# Import unsloth FIRST (before transformers/peft)
+import unsloth
+from unsloth import FastLanguageModel
+
 import os
 import logging
 import torch
@@ -14,7 +18,6 @@ from transformers import (
     EarlyStoppingCallback,
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from unsloth import FastLanguageModel
 import wandb
 from datetime import datetime
 
