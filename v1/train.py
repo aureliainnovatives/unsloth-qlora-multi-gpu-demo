@@ -45,18 +45,32 @@ from enhanced_callbacks import (
 logger = get_logger(__name__)
 
 
-def load_model_and_tokenizer(config):
+def load_model_and_tokenizer(config, accelerator):
     """Load model and tokenizer using Unsloth"""
     logger.info(f"Loading model: {config.model_name}")
     
-    # Load model with Unsloth
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=config.model_name,
-        max_seq_length=config.max_seq_length,
-        dtype=config.dtype,
-        load_in_4bit=config.load_in_4bit,
-        trust_remote_code=True,
-    )
+    # For multi-GPU, disable 4-bit quantization and use device_map
+    if accelerator.num_processes > 1:
+        # Multi-GPU mode: disable quantization, use device mapping
+        logger.info("Multi-GPU detected: Disabling 4-bit quantization for distributed training")
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=config.model_name,
+            max_seq_length=config.max_seq_length,
+            dtype=config.dtype,
+            load_in_4bit=False,  # Disable for multi-GPU
+            device_map={"": accelerator.local_process_index},  # Each GPU gets the model
+            trust_remote_code=True,
+        )
+    else:
+        # Single GPU mode: keep 4-bit quantization
+        logger.info("Single GPU detected: Using 4-bit quantization")
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=config.model_name,
+            max_seq_length=config.max_seq_length,
+            dtype=config.dtype,
+            load_in_4bit=config.load_in_4bit,
+            trust_remote_code=True,
+        )
     
     # Apply LoRA using Unsloth
     model = FastLanguageModel.get_peft_model(
@@ -256,7 +270,7 @@ def main():
     logger.info(f"Using {accelerator.num_processes} GPUs")
     
     # Load model and tokenizer
-    model, tokenizer = load_model_and_tokenizer(config)
+    model, tokenizer = load_model_and_tokenizer(config, accelerator)
     
     # Log model information
     log_model_parameters(training_logger, model)
