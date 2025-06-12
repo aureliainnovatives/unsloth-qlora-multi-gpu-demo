@@ -45,7 +45,7 @@ class Config:
     target_modules: list = None
     
     # Evaluation Configuration
-    eval_steps: int = 200
+    eval_steps: int = 25  # Match with short training (50 steps)
     eval_strategy: str = "steps"
     per_device_eval_batch_size: int = 2
     save_best_model: bool = True
@@ -53,7 +53,7 @@ class Config:
     # Output Configuration
     output_dir: str = "./checkpoints"
     logging_dir: str = "./logs"
-    save_steps: int = 500
+    save_steps: int = 25  # Match eval_steps for save_best_model
     save_total_limit: int = 3
     resume_from_checkpoint: Optional[str] = None
     
