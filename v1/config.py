@@ -11,7 +11,7 @@ class Config:
     gpu_device_ids: Optional[list] = None  # Specific GPU IDs to use (None = all available)
     
     # Model Configuration
-    model_name: str = "unsloth/qwen-7b-qlora"
+    model_name: str = "unsloth/llama-2-7b-bnb-4bit"  # Working Unsloth model
     max_seq_length: int = 2048
     dtype: Optional[torch.dtype] = None  # Auto-detected
     load_in_4bit: bool = True
