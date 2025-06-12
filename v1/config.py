@@ -26,7 +26,7 @@ class Config:
     per_device_train_batch_size: int = 2
     gradient_accumulation_steps: int = 4
     warmup_steps: int = 5
-    max_steps: int = 1000
+    max_steps: int = 50  # Short for testing -- 1000
     learning_rate: float = 2e-4
     fp16: bool = False
     bf16: bool = True
