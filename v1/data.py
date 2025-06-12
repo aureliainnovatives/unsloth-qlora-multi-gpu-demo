@@ -65,17 +65,25 @@ class DatasetProcessor:
         # Get text field
         texts = examples[self.config.dataset_text_field]
         
-        # Tokenize
+        # Filter out empty texts
+        texts = [text for text in texts if text and len(text.strip()) > 0]
+        
+        if not texts:
+            # Return empty batch if no valid texts
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+        
+        # Tokenize with padding and truncation
         tokenized = self.tokenizer(
             texts,
             truncation=True,
-            padding=False,
+            padding=True,  # Enable padding
             max_length=self.config.max_seq_length,
             return_overflowing_tokens=False,
+            return_tensors=None,  # Keep as lists for now
         )
         
         # For causal LM, labels are the same as input_ids
-        tokenized["labels"] = tokenized["input_ids"].copy()
+        tokenized["labels"] = [ids.copy() for ids in tokenized["input_ids"]]
         
         return tokenized
     
@@ -120,6 +128,7 @@ class DatasetProcessor:
             tokenizer=self.tokenizer,
             mlm=False,  # We're doing causal LM, not masked LM
             pad_to_multiple_of=8,  # For efficiency on modern hardware
+            return_tensors="pt",  # Ensure PyTorch tensors
         )
 
 

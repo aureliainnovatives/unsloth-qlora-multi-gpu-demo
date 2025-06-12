@@ -137,7 +137,7 @@ def setup_training_arguments(config, accelerator):
         
         # Misc
         seed=config.seed,
-        report_to=["wandb"] if wandb.run else None,
+        report_to=None,  # No wandb reporting
         run_name=f"qwen-7b-qlora-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         
         # Remove unused columns automatically
@@ -225,11 +225,15 @@ def main():
     print(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES', 'Not set')}")
     print(f"{'='*60}\n")
     
+    # Disable wandb completely
+    os.environ["WANDB_DISABLED"] = "true"
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Fix tokenizer warning
+    
     # Initialize accelerator
     accelerator = Accelerator(
         mixed_precision=config.mixed_precision,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
-        log_with="wandb" if os.getenv("WANDB_API_KEY") else None,
+        log_with=None,  # No wandb logging
     )
     
     # Setup logging
@@ -245,13 +249,8 @@ def main():
     if accelerator.is_main_process:
         save_config(config, config.output_dir)
         
-        # Initialize wandb if API key is available
-        if os.getenv("WANDB_API_KEY"):
-            wandb.init(
-                project="qwen-7b-qlora-multigpu",
-                name=f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-                config=config.__dict__,
-            )
+        # Disable wandb - hardcoded to avoid prompts
+        os.environ["WANDB_DISABLED"] = "true"
     
     logger.info("Starting QLoRA Multi-GPU Fine-tuning")
     logger.info(f"Using {accelerator.num_processes} GPUs")
@@ -334,9 +333,7 @@ def main():
         logger.info("Training and evaluation completed successfully!")
         logger.info(f"Final model saved to: {os.path.join(config.output_dir, 'final_model')}")
         
-        # Close wandb
-        if wandb.run:
-            wandb.finish()
+        # Wandb disabled - no cleanup needed
 
 
 if __name__ == "__main__":

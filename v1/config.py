@@ -12,7 +12,7 @@ class Config:
     
     # Model Configuration
     model_name: str = "unsloth/llama-2-7b-bnb-4bit"  # Working Unsloth model
-    max_seq_length: int = 2048
+    max_seq_length: int = 512  # Reduced for stability
     dtype: Optional[torch.dtype] = None  # Auto-detected
     load_in_4bit: bool = True
     
@@ -60,8 +60,8 @@ class Config:
     # Accelerate Configuration
     mixed_precision: str = "bf16"  # or "fp16"
     gradient_checkpointing: bool = True
-    dataloader_pin_memory: bool = True
-    dataloader_num_workers: int = 4
+    dataloader_pin_memory: bool = False  # Disable for stability
+    dataloader_num_workers: int = 0  # Single threaded for stability
     
     def __post_init__(self):
         if self.target_modules is None:
