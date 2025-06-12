@@ -72,33 +72,22 @@ def load_model_and_tokenizer(config, accelerator):
             trust_remote_code=True,
         )
     
-    # Apply LoRA using Unsloth
+    # Apply LoRA using Unsloth - disable gradient checkpointing for both modes
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=config.r,
+        target_modules=config.target_modules,
+        lora_alpha=config.lora_alpha,
+        lora_dropout=config.lora_dropout,
+        bias=config.bias,
+        use_gradient_checkpointing=False,  # Disable completely for DDP compatibility
+        random_state=config.seed,
+    )
+    
     if accelerator.num_processes > 1:
-        # Multi-GPU: Disable Unsloth gradient checkpointing (incompatible with DDP)
-        model = FastLanguageModel.get_peft_model(
-            model,
-            r=config.r,
-            target_modules=config.target_modules,
-            lora_alpha=config.lora_alpha,
-            lora_dropout=config.lora_dropout,
-            bias=config.bias,
-            use_gradient_checkpointing=True,  # Use standard gradient checkpointing
-            random_state=config.seed,
-        )
-        logger.info("Multi-GPU: Using standard gradient checkpointing")
+        logger.info("Multi-GPU: Unsloth with disabled gradient checkpointing for DDP compatibility")
     else:
-        # Single GPU: Use Unsloth optimizations
-        model = FastLanguageModel.get_peft_model(
-            model,
-            r=config.r,
-            target_modules=config.target_modules,
-            lora_alpha=config.lora_alpha,
-            lora_dropout=config.lora_dropout,
-            bias=config.bias,
-            use_gradient_checkpointing="unsloth",  # Use Unsloth's optimized gradient checkpointing
-            random_state=config.seed,
-        )
-        logger.info("Single GPU: Using Unsloth optimized gradient checkpointing")
+        logger.info("Single GPU: Unsloth with disabled gradient checkpointing")
     
     # Set pad token if needed
     if tokenizer.pad_token is None:
@@ -138,7 +127,7 @@ def setup_training_arguments(config, accelerator):
         per_device_train_batch_size=config.per_device_train_batch_size,
         per_device_eval_batch_size=config.per_device_eval_batch_size,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
-        gradient_checkpointing=config.gradient_checkpointing,
+        gradient_checkpointing=False,  # Disable to avoid DDP conflicts
         
         # Optimization
         optim=config.optim,
