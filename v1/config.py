@@ -45,15 +45,15 @@ class Config:
     target_modules: list = None
     
     # Evaluation Configuration
-    eval_steps: int = 25  # Match with short training (50 steps)
-    eval_strategy: str = "steps"
+    eval_steps: int = 100  # Skip evaluation during short training
+    eval_strategy: str = "no"  # Disable evaluation to avoid Unsloth issues
     per_device_eval_batch_size: int = 2
-    save_best_model: bool = True
+    save_best_model: bool = False  # Disable since no evaluation
     
     # Output Configuration
     output_dir: str = "./checkpoints"
     logging_dir: str = "./logs"
-    save_steps: int = 25  # Match eval_steps for save_best_model
+    save_steps: int = 50  # Save only at the end
     save_total_limit: int = 3
     resume_from_checkpoint: Optional[str] = None
     

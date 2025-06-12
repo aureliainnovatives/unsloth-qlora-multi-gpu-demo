@@ -296,7 +296,7 @@ def main():
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics,
+        compute_metrics=None,  # Disable to avoid Unsloth evaluation issues
         callbacks=callbacks,
     )
     
