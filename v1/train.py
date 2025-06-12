@@ -27,6 +27,17 @@ from utils import (
     compute_metrics,
     print_trainable_parameters,
 )
+from training_logger import (
+    create_training_logger,
+    log_model_parameters,
+    log_dataset_info,
+    MultiGPUTrainingLogger
+)
+from enhanced_callbacks import (
+    EnhancedTrainingCallback,
+    MultiGPUMonitoringCallback,
+    PerformanceMonitoringCallback
+)
 
 logger = get_logger(__name__)
 
@@ -221,6 +232,9 @@ def main():
     # Setup logging
     setup_logging(accelerator)
     
+    # Create enhanced training logger
+    training_logger = create_training_logger(config, accelerator)
+    
     # Set seed for reproducibility
     set_seed(config.seed)
     
@@ -242,11 +256,17 @@ def main():
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(config)
     
+    # Log model information
+    log_model_parameters(training_logger, model)
+    
     # Prepare datasets
     data_processor = create_dataloaders(config, accelerator)
     data_processor.load_tokenizer(model)
     train_dataset, eval_dataset = data_processor.load_dataset()
     train_dataset, eval_dataset = data_processor.prepare_datasets()
+    
+    # Log dataset information
+    log_dataset_info(training_logger, train_dataset, eval_dataset)
     
     # Create data collator
     data_collator = data_processor.create_data_collator()
@@ -260,6 +280,11 @@ def main():
         callbacks.append(EarlyStoppingCallback(early_stopping_patience=3))
     
     callbacks.append(EvaluationCallback())
+    
+    # Add enhanced logging callbacks
+    callbacks.append(EnhancedTrainingCallback(training_logger))
+    callbacks.append(MultiGPUMonitoringCallback(training_logger))
+    callbacks.append(PerformanceMonitoringCallback(training_logger))
     
     # Initialize trainer
     trainer = Trainer(
