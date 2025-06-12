@@ -49,10 +49,10 @@ def load_model_and_tokenizer(config, accelerator):
     """Load model and tokenizer using Unsloth"""
     logger.info(f"Loading model: {config.model_name}")
     
-    # For multi-GPU, disable 4-bit quantization and use device_map
+    # For FAIR comparison, use the same precision for both modes
     if accelerator.num_processes > 1:
-        # Multi-GPU mode: disable quantization, use device mapping
-        logger.info("Multi-GPU detected: Disabling 4-bit quantization for distributed training")
+        # Multi-GPU mode: use full precision (required for distributed training)
+        logger.info("Multi-GPU detected: Using full precision for distributed training")
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=config.model_name,
             max_seq_length=config.max_seq_length,
@@ -62,13 +62,13 @@ def load_model_and_tokenizer(config, accelerator):
             trust_remote_code=True,
         )
     else:
-        # Single GPU mode: keep 4-bit quantization
-        logger.info("Single GPU detected: Using 4-bit quantization")
+        # Single GPU mode: ALSO use full precision for fair comparison
+        logger.info("Single GPU detected: Using full precision for fair comparison with multi-GPU")
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=config.model_name,
             max_seq_length=config.max_seq_length,
             dtype=config.dtype,
-            load_in_4bit=config.load_in_4bit,
+            load_in_4bit=False,  # Disable for fair comparison
             trust_remote_code=True,
         )
     
