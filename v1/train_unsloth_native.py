@@ -96,19 +96,37 @@ def load_model_and_tokenizer_unsloth(config, is_multi_gpu):
 def format_prompts(examples):
     """Format prompts for instruction tuning"""
     texts = []
-    for conversation in examples["conversations"]:
-        # Simple format for Unsloth
-        if isinstance(conversation, list) and len(conversation) > 0:
-            text = ""
-            for turn in conversation:
-                if "from" in turn and "value" in turn:
-                    if turn["from"] == "human":
-                        text += f"### Instruction:\n{turn['value']}\n\n"
-                    elif turn["from"] == "gpt":
-                        text += f"### Response:\n{turn['value']}\n\n"
-            texts.append(text)
-        else:
-            texts.append(str(conversation))
+    
+    # Check what fields are available
+    if "text" in examples:
+        # If text field already exists, use it directly
+        return {"text": examples["text"]}
+    elif "conversations" in examples:
+        # Format conversations
+        for conversation in examples["conversations"]:
+            if isinstance(conversation, list) and len(conversation) > 0:
+                text = ""
+                for turn in conversation:
+                    if "from" in turn and "value" in turn:
+                        if turn["from"] == "human":
+                            text += f"### Instruction:\n{turn['value']}\n\n"
+                        elif turn["from"] == "gpt":
+                            text += f"### Response:\n{turn['value']}\n\n"
+                texts.append(text)
+            else:
+                texts.append(str(conversation))
+    else:
+        # Fallback: use any available text field
+        for key in examples.keys():
+            if isinstance(examples[key], list) and len(examples[key]) > 0:
+                if isinstance(examples[key][0], str):
+                    texts = examples[key]
+                    break
+        
+        if not texts:
+            # Last resort: convert first field to strings
+            first_key = list(examples.keys())[0]
+            texts = [str(item) for item in examples[first_key]]
     
     return {"text": texts}
 
@@ -139,6 +157,11 @@ def main():
     # Load and prepare dataset
     logger.info("Loading dataset...")
     dataset = load_dataset("timdettmers/openassistant-guanaco", split="train[:1000]")
+    
+    # Debug: Check dataset structure
+    logger.info(f"Dataset columns: {dataset.column_names}")
+    if len(dataset) > 0:
+        logger.info(f"First example keys: {list(dataset[0].keys())}")
     
     # Format dataset for Unsloth
     dataset = dataset.map(format_prompts, batched=True)
