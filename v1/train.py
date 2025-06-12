@@ -169,16 +169,16 @@ def setup_gpu_environment(config, args):
     
     # Check available GPUs
     available_gpus = torch.cuda.device_count()
-    logger.info(f"Available GPUs: {available_gpus}")
+    print(f"Available GPUs: {available_gpus}")  # Use print instead of logger before accelerator init
     
     if available_gpus == 0:
-        logger.warning("No CUDA GPUs available. Using CPU.")
+        print("WARNING: No CUDA GPUs available. Using CPU.")
         return False
     
     # Handle force single GPU
     if args.force_single_gpu or config.force_single_gpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-        logger.info("FORCED SINGLE GPU MODE - Using GPU 0 only")
+        print("FORCED SINGLE GPU MODE - Using GPU 0 only")
         return False
     
     # Handle specific GPU IDs
@@ -188,15 +188,15 @@ def setup_gpu_environment(config, args):
     if config.gpu_device_ids:
         gpu_list = ','.join(map(str, config.gpu_device_ids))
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list
-        logger.info(f"Using specific GPUs: {gpu_list}")
+        print(f"Using specific GPUs: {gpu_list}")
         return len(config.gpu_device_ids) > 1
     
     # Use all available GPUs for multi-GPU if enabled
     if config.use_multi_gpu and available_gpus > 1:
-        logger.info(f"MULTI-GPU MODE - Using all {available_gpus} GPUs")
+        print(f"MULTI-GPU MODE - Using all {available_gpus} GPUs")
         return True
     else:
-        logger.info("SINGLE GPU MODE - Using GPU 0 only")
+        print("SINGLE GPU MODE - Using GPU 0 only")
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         return False
 
