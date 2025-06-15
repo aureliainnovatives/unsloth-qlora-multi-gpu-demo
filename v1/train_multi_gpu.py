@@ -2,6 +2,7 @@
 
 """
 Multi-GPU Training Script - Standard Transformers + PEFT
+Uses training_configs.py for configuration management
 """
 
 import os
@@ -14,10 +15,12 @@ from transformers import (
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
+    BitsAndBytesConfig,
 )
 from peft import LoraConfig, get_peft_model, TaskType
 from datasets import load_dataset
 from accelerate import Accelerator
+from training_configs import get_config, parse_training_args
 
 # Disable wandb and warnings
 os.environ["WANDB_DISABLED"] = "true"
@@ -27,18 +30,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def main():
-    # Configuration
-    config = {
-        "model_name": "meta-llama/Llama-2-7b-hf",
-        "max_seq_length": 512,
-        "max_steps": 50,
-        "per_device_train_batch_size": 2,
-        "gradient_accumulation_steps": 4,
-        "learning_rate": 2e-4,
-        "r": 16,
-        "lora_alpha": 32,
-        "lora_dropout": 0.1,
-    }
+    # Parse arguments and get configuration
+    args = parse_training_args()
+    config = get_config(args.config)
     
     # Initialize accelerator for multi-GPU
     accelerator = Accelerator()
@@ -46,6 +40,7 @@ def main():
     print("="*60)
     print("🚀 MULTI-GPU TRAINING (Standard Transformers)")
     print("="*60)
+    print(f"Config: {args.config}")
     print(f"Model: {config['model_name']}")
     print(f"Max steps: {config['max_steps']}")
     print(f"Batch size per device: {config['per_device_train_batch_size']}")
@@ -61,10 +56,24 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
     
-    # Load model (full precision for multi-GPU)
+    # Set up quantization if specified
+    quantization_config = None
+    if config["use_bnb"] and config["quantization"] in ["4bit", "8bit"]:
+        if config["quantization"] == "4bit":
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            )
+        elif config["quantization"] == "8bit":
+            quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+    
+    # Load model
     logger.info("Loading model...")
     model = AutoModelForCausalLM.from_pretrained(
         config["model_name"],
+        quantization_config=quantization_config,
         torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
         device_map={"": accelerator.local_process_index},
         trust_remote_code=True,
@@ -77,7 +86,7 @@ def main():
         r=config["r"],
         lora_alpha=config["lora_alpha"],
         lora_dropout=config["lora_dropout"],
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        target_modules=config["target_modules"],
         bias="none",
     )
     
@@ -91,11 +100,14 @@ def main():
     if accelerator.is_main_process:
         logger.info("Loading dataset...")
     
-    dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split="train[:1000]")
+    if config["dataset_config"]:
+        dataset = load_dataset(config["dataset_name"], config["dataset_config"], split=config["dataset_split"])
+    else:
+        dataset = load_dataset(config["dataset_name"], split=config["dataset_split"])
     
     def tokenize_function(examples):
         return tokenizer(
-            examples["text"],
+            examples[config["dataset_text_field"]],
             truncation=True,
             padding=True,
             max_length=config["max_seq_length"],
@@ -103,8 +115,8 @@ def main():
         )
     
     # Process dataset
-    dataset = dataset.filter(lambda x: len(x["text"].strip()) > 0)
-    dataset = dataset.map(tokenize_function, batched=True, remove_columns=["text"])
+    dataset = dataset.filter(lambda x: len(x[config["dataset_text_field"]].strip()) > 0)
+    dataset = dataset.map(tokenize_function, batched=True, remove_columns=[config["dataset_text_field"]])
     
     # Add labels for causal LM
     def add_labels(examples):
@@ -125,21 +137,22 @@ def main():
     # Training arguments
     training_args = TrainingArguments(
         output_dir="./multi_gpu_output",
-        num_train_epochs=1,
+        num_train_epochs=config["num_train_epochs"],
         max_steps=config["max_steps"],
         per_device_train_batch_size=config["per_device_train_batch_size"],
         gradient_accumulation_steps=config["gradient_accumulation_steps"],
-        warmup_steps=5,
+        warmup_steps=config["warmup_steps"],
         learning_rate=config["learning_rate"],
         fp16=not torch.cuda.is_bf16_supported(),
         bf16=torch.cuda.is_bf16_supported(),
-        logging_steps=1,
-        optim="adamw_torch",  # Standard optimizer for multi-GPU
-        weight_decay=0.01,
-        lr_scheduler_type="linear",
+        logging_steps=config["logging_steps"],
+        optim=config["optimizer"],
+        weight_decay=config["weight_decay"],
+        lr_scheduler_type=config["lr_scheduler_type"],
         seed=42,
-        save_steps=50,
-        eval_strategy="no",  # Disable evaluation for simplicity
+        save_steps=config["save_steps"],
+        eval_strategy=config["eval_strategy"],
+        eval_steps=config.get("eval_steps", 50),
         save_total_limit=1,
         report_to=None,
         dataloader_pin_memory=False,
