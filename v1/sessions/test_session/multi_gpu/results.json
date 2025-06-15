@@ -1,1 +1,0 @@
-{"mode": "multi-gpu", "session": "test_session", "config": "small", "duration_seconds": 60.0, "final_loss": 4.5, "steps_per_second": 1.67, "total_steps": 50, "num_gpus": 2, "model_name": "test-model", "optimizations": "test-opt"}
