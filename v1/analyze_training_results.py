@@ -275,44 +275,35 @@ def main():
         else:
             print("No training results found for this session")
     
-    # Display detailed file listing
-    print("\n📋 DETAILED FILE LISTING")
-    print("="*50)
-    
-    for name, analysis in detailed_analysis.items():
-        print(f"\n📁 {name.upper()}")
-        print("-"*30)
-        
-        if analysis["files"]:
-            print(f"{'File':<30} {'Size (MB)':<10} {'Modified':<20}")
-            print("-"*60)
-            for file_info in sorted(analysis["files"], key=lambda x: x["size_mb"], reverse=True):
-                print(f"{file_info['name'][:29]:<30} {file_info['size_mb']:<10.2f} {file_info['modified']:<20}")
-        else:
-            print("No files found")
-    
     # Generate summary
-    print(f"\n🎯 SUMMARY")
+    print(f"\nSUMMARY")
     print("="*50)
-    print(f"✅ Total output directories analyzed: {len(outputs)}")
-    print(f"✅ Results files found: {len([r for r in results.values() if r])}")
+    print(f"Total training sessions analyzed: {len(sessions_to_analyze)}")
     
-    if single_result and multi_result:
-        print(f"✅ Performance comparison available")
-        
-        # Key insights
-        if 'duration_seconds' in single_result and 'duration_seconds' in multi_result:
-            speedup = single_result['duration_seconds'] / multi_result['duration_seconds']
-            if speedup > 1.1:
-                print(f"🚀 Multi-GPU training was {speedup:.1f}x faster!")
-            elif speedup < 0.9:
-                print(f"⚠️  Single-GPU training was {1/speedup:.1f}x faster")
-            else:
-                print(f"⚖️  Similar performance between single and multi-GPU")
+    # Count sessions with results
+    sessions_with_results = 0
+    for session_name, session_info in sessions_to_analyze.items():
+        if session_info["type"] == "session":
+            if session_info.get("single_gpu") or session_info.get("multi_gpu"):
+                sessions_with_results += 1
+        else:
+            sessions_with_results += 1
     
-    print("\n💡 To view logs in real-time during training, use:")
-    print("   tail -f single_gpu_output/trainer_state.json")
-    print("   tail -f multi_gpu_output/trainer_state.json")
+    print(f"Sessions with training results: {sessions_with_results}")
+    
+    print("\nTo view detailed logs and files:")
+    for session_name, session_info in sessions_to_analyze.items():
+        if session_info["type"] == "session":
+            print(f"Session {session_name}:")
+            if session_info.get("single_gpu"):
+                print(f"  Single GPU: sessions/{session_name}/single_gpu/")
+            if session_info.get("multi_gpu"):
+                print(f"  Multi GPU: sessions/{session_name}/multi_gpu/")
+    
+    print("\nReal-time log monitoring commands:")
+    for session_name in sessions_to_analyze.keys():
+        print(f"  tail -f sessions/{session_name}/single_gpu/trainer_state.json")
+        print(f"  tail -f sessions/{session_name}/multi_gpu/trainer_state.json")
 
 if __name__ == "__main__":
     main()
