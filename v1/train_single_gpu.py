@@ -13,7 +13,8 @@ import os
 import torch
 import logging
 from datetime import datetime
-from transformers import TrainingArguments, Trainer
+from transformers import TrainingArguments, DataCollatorForLanguageModeling
+from trl import SFTTrainer
 from datasets import load_dataset
 from training_configs import get_config, parse_training_args
 
@@ -53,20 +54,36 @@ def main():
         trust_remote_code=True,
     )
     
-    # Apply LoRA
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=config["r"],
-        target_modules=config["target_modules"],
-        lora_alpha=config["lora_alpha"],
-        lora_dropout=config["lora_dropout"],
-        bias="none",
-        use_gradient_checkpointing="unsloth",  # Unsloth optimization
-        random_state=42,
-    )
+    # Apply LoRA - Check if model supports Unsloth optimizations
+    if "llama" in config["model_name"].lower() or "mistral" in config["model_name"].lower():
+        # Use Unsloth for supported models
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=config["r"],
+            target_modules=config["target_modules"],
+            lora_alpha=config["lora_alpha"],
+            lora_dropout=config["lora_dropout"],
+            bias="none",
+            use_gradient_checkpointing="unsloth",
+            random_state=42,
+        )
+    else:
+        # Use standard PEFT for other models (like DialoGPT)
+        from peft import LoraConfig, get_peft_model, TaskType
+        peft_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            inference_mode=False,
+            r=config["r"],
+            lora_alpha=config["lora_alpha"],
+            lora_dropout=config["lora_dropout"],
+            target_modules=config["target_modules"],
+            bias="none",
+        )
+        model = get_peft_model(model, peft_config)
     
-    # Enable training mode
-    FastLanguageModel.for_training(model)
+    # Enable training mode (only for Unsloth models)
+    if "llama" in config["model_name"].lower() or "mistral" in config["model_name"].lower():
+        FastLanguageModel.for_training(model)
     
     logger.info("Model loaded with Unsloth optimizations")
     model.print_trainable_parameters()
@@ -140,14 +157,16 @@ def main():
         return_tensors="pt",
     )
     
-    # Create trainer
-    trainer = Trainer(
+    # Create trainer - Use SFTTrainer for better compatibility
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
+        dataset_text_field=config["dataset_text_field"],
+        max_seq_length=config["max_seq_length"],
     )
     
     # Start training
