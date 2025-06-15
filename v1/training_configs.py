@@ -15,6 +15,7 @@ TRAINING_CONFIGS = {
         "model_type": "standard",  # standard, unsloth
         "max_seq_length": 256,
         "quantization": "8bit",  # none, 8bit, 4bit
+        "use_bnb": True,  # Use BitsAndBytes quantization
         
         # Training Configuration
         "max_steps": 20,
@@ -55,6 +56,7 @@ TRAINING_CONFIGS = {
         "model_type": "standard",
         "max_seq_length": 512,
         "quantization": "8bit",
+        "use_bnb": True,  # Use BitsAndBytes quantization
         
         # Training Configuration
         "max_steps": 100,
@@ -96,6 +98,7 @@ TRAINING_CONFIGS = {
         "model_type": "unsloth",  # Use Unsloth for large models
         "max_seq_length": 1024,
         "quantization": "4bit",
+        "use_bnb": True,  # Use BitsAndBytes quantization
         
         # Training Configuration
         "max_steps": 500,
