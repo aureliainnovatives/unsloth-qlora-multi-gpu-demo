@@ -44,9 +44,17 @@ def main():
     print(f"Model: {config['model_name']}")
     print(f"Max steps: {config['max_steps']}")
     print(f"Batch size per device: {config['per_device_train_batch_size']}")
-    print(f"Number of GPUs: {accelerator.num_processes}")
+    print(f"Number of GPUs detected: {torch.cuda.device_count()}")
+    print(f"Accelerator processes: {accelerator.num_processes}")
     print(f"Current GPU: {accelerator.local_process_index}")
     print(f"Total batch size: {config['per_device_train_batch_size'] * config['gradient_accumulation_steps'] * accelerator.num_processes}")
+    
+    if accelerator.num_processes == 1 and torch.cuda.device_count() > 1:
+        print("⚠️  WARNING: Multiple GPUs detected but only using 1!")
+        print("💡 To use multiple GPUs, launch with:")
+        print("   accelerate launch train_multi_gpu.py --config small")
+        print("   OR: torchrun --nproc_per_node=2 train_multi_gpu.py --config small")
+    
     print("="*60)
     
     # Load tokenizer
