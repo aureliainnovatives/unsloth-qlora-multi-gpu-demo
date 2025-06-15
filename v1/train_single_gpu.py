@@ -123,9 +123,14 @@ def main():
     logger.info(f"Train samples: {len(train_dataset)}")
     logger.info(f"Eval samples: {len(eval_dataset)}")
     
+    # Setup output directory with session structure
+    session_dir = f"./sessions/{args.trainsession}"
+    output_dir = f"{session_dir}/single_gpu"
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Training arguments
     training_args = TrainingArguments(
-        output_dir="./single_gpu_output",
+        output_dir=output_dir,
         num_train_epochs=config["num_train_epochs"],
         max_steps=config["max_steps"],
         per_device_train_batch_size=config["per_device_train_batch_size"],
@@ -184,11 +189,13 @@ def main():
         logger.info(f"Steps per second: {config['max_steps'] / duration:.2f}")
         
         # Save model
-        trainer.save_model("./single_gpu_output/final_model")
+        trainer.save_model(f"{output_dir}/final_model")
         
         # Save results summary
         results = {
             "mode": "single-gpu",
+            "session": args.trainsession,
+            "config": args.config,
             "duration_seconds": duration,
             "final_loss": result.training_loss,
             "steps_per_second": config['max_steps'] / duration,
@@ -198,10 +205,10 @@ def main():
         }
         
         import json
-        with open("./single_gpu_output/results.json", "w") as f:
+        with open(f"{output_dir}/results.json", "w") as f:
             json.dump(results, f, indent=2)
         
-        logger.info("📊 Results saved to single_gpu_output/results.json")
+        logger.info(f"📊 Results saved to {output_dir}/results.json")
         
     except Exception as e:
         logger.error(f"❌ Training failed: {e}")

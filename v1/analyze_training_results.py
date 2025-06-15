@@ -1,29 +1,75 @@
 #!/usr/bin/env python3
 
 """
-Training Results Analyzer - Compare Single GPU vs Multi-GPU Performance
+Training Results Analyzer
+
+PURPOSE:
+This script analyzes and compares the performance of single GPU vs multi-GPU training
+runs. It provides comprehensive insights into training efficiency, speed improvements,
+loss convergence, and resource utilization.
+
+WHAT IT DOES:
+1. Scans for training session directories containing single_gpu and multi_gpu outputs
+2. Extracts performance metrics like training duration, loss, steps per second
+3. Compares single GPU vs multi-GPU performance with speedup calculations
+4. Shows detailed file listings and model outputs for each training run
+5. Provides actionable insights on GPU scaling efficiency
+
+KEY METRICS ANALYZED:
+- Training Duration: Total time taken for training completion
+- Steps Per Second: Training throughput (higher is better)
+- Final Loss: Model convergence quality (lower is better)
+- GPU Utilization: Number of GPUs used and scaling efficiency
+- Memory Usage: Model and checkpoint file sizes
+- Speedup Factor: Performance improvement from using multiple GPUs
+
+OUTPUT STRUCTURE:
+The script expects training outputs in this structure:
+sessions/
+  session_name/
+    single_gpu/
+      results.json, trainer_state.json, model files
+    multi_gpu/
+      results.json, trainer_state.json, model files
 """
 
 import os
 import json
 import glob
+import argparse
 from datetime import datetime
 from pathlib import Path
 
-def find_training_outputs():
-    """Find all training output directories"""
-    current_dir = Path(".")
-    outputs = {}
+def find_training_sessions():
+    """Find all training session directories"""
+    sessions_dir = Path("./sessions")
+    sessions = {}
     
-    # Look for output directories
-    patterns = ["*gpu_output", "*_output", "output*", "results*"]
+    if not sessions_dir.exists():
+        # Fallback to old structure
+        current_dir = Path(".")
+        patterns = ["*gpu_output", "*_output", "output*", "results*"]
+        
+        for pattern in patterns:
+            for path in current_dir.glob(pattern):
+                if path.is_dir():
+                    sessions[path.name] = {"path": path, "type": "legacy"}
+        return sessions
     
-    for pattern in patterns:
-        for path in current_dir.glob(pattern):
-            if path.is_dir():
-                outputs[path.name] = path
+    # New session-based structure
+    for session_path in sessions_dir.iterdir():
+        if session_path.is_dir():
+            single_gpu_path = session_path / "single_gpu"
+            multi_gpu_path = session_path / "multi_gpu"
+            
+            sessions[session_path.name] = {
+                "path": session_path,
+                "type": "session",
+                "single_gpu": single_gpu_path if single_gpu_path.exists() else None,
+                "multi_gpu": multi_gpu_path if multi_gpu_path.exists() else None
+            }
     
-    return outputs
+    return sessions
 
 def analyze_results_json(results_path):
     """Analyze results.json file"""
@@ -119,59 +165,115 @@ def display_comparison(single_gpu_results, multi_gpu_results):
     print("="*80)
 
 def main():
-    print("🔍 TRAINING RESULTS ANALYZER")
+    parser = argparse.ArgumentParser(description="Analyze training results")
+    parser.add_argument("--session", type=str, help="Specific session to analyze")
+    args = parser.parse_args()
+    
+    print("TRAINING RESULTS ANALYZER")
     print("="*50)
+    print("This tool analyzes your multi-GPU training performance and provides")
+    print("detailed comparisons between single GPU and multi-GPU training runs.")
+    print("")
     
-    # Find output directories
-    outputs = find_training_outputs()
+    # Find sessions
+    sessions = find_training_sessions()
     
-    if not outputs:
-        print("❌ No training output directories found!")
-        print("💡 Make sure you're running this from the training directory")
+    if not sessions:
+        print("No training output directories found!")
+        print("Make sure you're running this from the training directory")
+        print("Expected structure: sessions/session_name/single_gpu/ and sessions/session_name/multi_gpu/")
         return
     
-    print(f"📁 Found {len(outputs)} output directories:")
-    for name, path in outputs.items():
-        print(f"  - {name}: {path}")
+    if args.session:
+        if args.session not in sessions:
+            print(f"Session '{args.session}' not found!")
+            print(f"Available sessions: {list(sessions.keys())}")
+            return
+        sessions_to_analyze = {args.session: sessions[args.session]}
+    else:
+        sessions_to_analyze = sessions
+    
+    print(f"Found {len(sessions_to_analyze)} training session(s):")
+    for name, session_info in sessions_to_analyze.items():
+        if session_info["type"] == "session":
+            single_exists = "YES" if session_info["single_gpu"] else "NO"
+            multi_exists = "YES" if session_info["multi_gpu"] else "NO"
+            print(f"  - {name}: Single GPU [{single_exists}], Multi GPU [{multi_exists}]")
+        else:
+            print(f"  - {name}: Legacy format")
     
     print("\n" + "="*50)
     
-    # Analyze each output directory
-    results = {}
-    detailed_analysis = {}
-    
-    for name, path in outputs.items():
-        print(f"\n📊 Analyzing: {name}")
-        print("-"*30)
+    # Analyze each session
+    for session_name, session_info in sessions_to_analyze.items():
+        print(f"\nAnalyzing Session: {session_name}")
+        print("-"*40)
         
-        # Look for results.json
-        results_json = path / "results.json"
-        if results_json.exists():
-            results[name] = analyze_results_json(results_json)
-            if results[name]:
-                print(f"✅ Found results.json")
-                for key, value in results[name].items():
-                    print(f"  {key}: {value}")
+        single_result = None
+        multi_result = None
+        
+        if session_info["type"] == "session":
+            # New session structure
+            if session_info["single_gpu"]:
+                results_json = session_info["single_gpu"] / "results.json"
+                if results_json.exists():
+                    single_result = analyze_results_json(results_json)
+                    print("Single GPU Training Results:")
+                    if single_result:
+                        for key, value in single_result.items():
+                            print(f"  {key}: {value}")
+                    
+                    # File analysis
+                    single_analysis = analyze_training_logs(session_info["single_gpu"])
+                    file_count = len(single_analysis["files"])
+                    total_size = sum(f["size_mb"] for f in single_analysis["files"])
+                    print(f"  Files: {file_count} (Total: {total_size:.1f} MB)")
+            
+            if session_info["multi_gpu"]:
+                results_json = session_info["multi_gpu"] / "results.json"
+                if results_json.exists():
+                    multi_result = analyze_results_json(results_json)
+                    print("\nMulti GPU Training Results:")
+                    if multi_result:
+                        for key, value in multi_result.items():
+                            print(f"  {key}: {value}")
+                    
+                    # File analysis
+                    multi_analysis = analyze_training_logs(session_info["multi_gpu"])
+                    file_count = len(multi_analysis["files"])
+                    total_size = sum(f["size_mb"] for f in multi_analysis["files"])
+                    print(f"  Files: {file_count} (Total: {total_size:.1f} MB)")
+        
+        # Performance comparison
+        if single_result and multi_result:
+            print("\n")
+            display_comparison(single_result, multi_result)
+            
+            # Performance insights
+            print("\nPERFORMANCE INSIGHTS:")
+            print("-"*30)
+            
+            duration_improvement = single_result.get('duration_seconds', 0) / multi_result.get('duration_seconds', 1)
+            if duration_improvement > 1.5:
+                print(f"EXCELLENT: Multi-GPU achieved {duration_improvement:.1f}x speedup")
+            elif duration_improvement > 1.1:
+                print(f"GOOD: Multi-GPU achieved {duration_improvement:.1f}x speedup")
+            else:
+                print(f"POOR: Multi-GPU scaling inefficient ({duration_improvement:.1f}x)")
+            
+            loss_improvement = (single_result.get('final_loss', 0) - multi_result.get('final_loss', 0)) / single_result.get('final_loss', 1) * 100
+            if abs(loss_improvement) < 5:
+                print("Loss convergence is similar between single and multi-GPU")
+            elif loss_improvement > 0:
+                print(f"Multi-GPU achieved {loss_improvement:.1f}% better loss convergence")
+            else:
+                print(f"Single-GPU achieved {abs(loss_improvement):.1f}% better loss convergence")
+        elif single_result:
+            print("Only single GPU results available")
+        elif multi_result:
+            print("Only multi GPU results available")
         else:
-            print(f"❌ No results.json found")
-        
-        # Detailed file analysis
-        detailed_analysis[name] = analyze_training_logs(path)
-        file_count = len(detailed_analysis[name]["files"])
-        total_size = sum(f["size_mb"] for f in detailed_analysis[name]["files"])
-        
-        print(f"📁 Files: {file_count} (Total: {total_size:.1f} MB)")
-        print(f"📁 Checkpoints: {len(detailed_analysis[name]['checkpoints'])}")
-        print(f"📁 Model files: {len(detailed_analysis[name]['model_files'])}")
-        print(f"📁 Log files: {len(detailed_analysis[name]['logs'])}")
-    
-    # Compare single vs multi GPU if both exist
-    single_result = results.get('single_gpu_output')
-    multi_result = results.get('multi_gpu_output')
-    
-    if single_result and multi_result:
-        print("\n")
-        display_comparison(single_result, multi_result)
+            print("No training results found for this session")
     
     # Display detailed file listing
     print("\n📋 DETAILED FILE LISTING")

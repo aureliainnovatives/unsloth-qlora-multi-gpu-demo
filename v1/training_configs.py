@@ -174,6 +174,12 @@ def parse_training_args():
         help="Training configuration preset (default: small)"
     )
     parser.add_argument(
+        "--trainsession",
+        type=str,
+        default="default",
+        help="Training session name for organized output folders (default: default)"
+    )
+    parser.add_argument(
         "--force-single-gpu",
         action="store_true",
         help="Force single GPU training even in multi-GPU environment"
